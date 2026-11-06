@@ -12,7 +12,7 @@ import (
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/schema"
 
-	agentobs "git.woa.com/albertbi/tencentcloud-agentobs-sdk-eino-go"
+	agentobs "github.com/TencentCloud/tencentcloud-agentobs-sdk-eino-go"
 )
 
 // chatModel stands for any Eino ToolCallingChatModel, for example one created

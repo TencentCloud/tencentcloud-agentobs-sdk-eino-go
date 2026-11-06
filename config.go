@@ -30,7 +30,7 @@ import (
 const Version = "v0.1.0"
 
 const (
-	instrumentationName = "git.woa.com/albertbi/tencentcloud-agentobs-sdk-eino-go"
+	instrumentationName = "github.com/TencentCloud/tencentcloud-agentobs-sdk-eino-go"
 
 	defaultServiceName             = "eino-agent"
 	defaultAgentType               = "eino"

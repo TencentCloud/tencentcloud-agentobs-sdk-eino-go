@@ -14,12 +14,11 @@ Converts [CloudWeGo Eino](https://github.com/cloudwego/eino) callbacks into Open
 ## Installation
 
 ```bash
-go env -w GOPRIVATE=git.woa.com
-go get git.woa.com/albertbi/tencentcloud-agentobs-sdk-eino-go
+go get github.com/TencentCloud/tencentcloud-agentobs-sdk-eino-go
 ```
 
 ```go
-import agentobs "git.woa.com/albertbi/tencentcloud-agentobs-sdk-eino-go"
+import agentobs "github.com/TencentCloud/tencentcloud-agentobs-sdk-eino-go"
 ```
 
 Requires Go 1.23+ and `github.com/cloudwego/eino` v0.9.x.

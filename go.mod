@@ -1,4 +1,4 @@
-module git.woa.com/albertbi/tencentcloud-agentobs-sdk-eino-go
+module github.com/TencentCloud/tencentcloud-agentobs-sdk-eino-go
 
 go 1.23.0
 

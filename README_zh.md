@@ -14,12 +14,11 @@
 ## 安装
 
 ```bash
-go env -w GOPRIVATE=git.woa.com
-go get git.woa.com/albertbi/tencentcloud-agentobs-sdk-eino-go
+go get github.com/TencentCloud/tencentcloud-agentobs-sdk-eino-go
 ```
 
 ```go
-import agentobs "git.woa.com/albertbi/tencentcloud-agentobs-sdk-eino-go"
+import agentobs "github.com/TencentCloud/tencentcloud-agentobs-sdk-eino-go"
 ```
 
 依赖 Go 1.23+ 和 `github.com/cloudwego/eino` v0.9.x。
