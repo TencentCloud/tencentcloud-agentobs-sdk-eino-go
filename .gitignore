@@ -1,0 +1,6 @@
+*.out
+*.test
+*.log
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,8 @@
+tencentcloud-agentobs-sdk-eino-go
+
+This product includes software adapted from CloudWeGo eino-ext
+(https://github.com/cloudwego/eino-ext, callbacks/langfuse/v2),
+Copyright 2026 CloudWeGo Authors, licensed under the Apache License,
+Version 2.0. The adapted portions (callback lifecycle, ADK agent event
+handling, error ownership and attribute-limit handling) were modified to
+produce Tencent Cloud CLS Agent Trace spans exported over OTLP/HTTP.
