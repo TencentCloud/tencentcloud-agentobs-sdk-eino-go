@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -27,7 +28,7 @@ import (
 )
 
 // Version is the SDK version reported as the instrumentation scope version.
-const Version = "v0.1.0"
+const Version = "v0.1.1"
 
 const (
 	instrumentationName = "github.com/TencentCloud/tencentcloud-agentobs-sdk-eino-go"
@@ -44,6 +45,7 @@ const (
 	tracesPath     = "/v1/traces"
 
 	// Environment variables used when the corresponding Config field is empty.
+	EnvAPIKey    = "CLS_API_KEY"
 	EnvSecretID  = "TENCENTCLOUD_SECRET_ID"
 	EnvSecretKey = "TENCENTCLOUD_SECRET_KEY"
 	EnvRegion    = "CLS_DEFAULT_REGION"
@@ -84,9 +86,13 @@ type Config struct {
 	// CrossRegion sets the x-cross-region header when uploading from another
 	// region, for example "ap-guangzhou".
 	CrossRegion string
-	// SecretID authenticates the upload (HTTP Basic) together with SecretKey.
-	// Falls back to TENCENTCLOUD_SECRET_ID. Never hardcode it; use a CAM
-	// sub-account restricted to CLS writes.
+	// APIKey authenticates the upload with the x-cls-apikey header. Falls back
+	// to CLS_API_KEY and takes precedence over SecretID/SecretKey. Never
+	// hardcode it.
+	APIKey string
+	// SecretID authenticates the upload (HTTP Basic) together with SecretKey
+	// when no APIKey is set. Falls back to TENCENTCLOUD_SECRET_ID. Never
+	// hardcode it; use a CAM sub-account restricted to CLS writes.
 	SecretID string
 	// TopicID is the CLS trace topic ID ({app}-trace-topic). Falls back to
 	// CLS_TOPIC_ID.
@@ -339,17 +345,13 @@ func resolveCLSTransport(cfg *Config) (*clsTransport, error) {
 	if !topicIDPattern.MatchString(topicID) {
 		return nil, errors.New("agentobs: invalid CLS topic ID")
 	}
-	secretID := strings.TrimSpace(firstNonEmpty(cfg.SecretID, os.Getenv(EnvSecretID)))
-	secretKey := strings.TrimSpace(firstNonEmpty(cfg.SecretKey, os.Getenv(EnvSecretKey)))
-	if secretID == "" || secretKey == "" {
-		return nil, fmt.Errorf("agentobs: CLS credentials are required (Config.SecretID/SecretKey or %s/%s)", EnvSecretID, EnvSecretKey)
-	}
-	if strings.ContainsAny(secretID, ":\r\n") || strings.ContainsAny(secretKey, "\r\n") {
-		return nil, errors.New("agentobs: invalid CLS credentials")
+	authHeader, authValue, err := clsAuthHeader(cfg)
+	if err != nil {
+		return nil, err
 	}
 	headers := map[string]string{
-		"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(secretID+":"+secretKey)),
-		"topic_id":      topicID,
+		authHeader: authValue,
+		"topic_id": topicID,
 	}
 	if cross := strings.TrimSpace(cfg.CrossRegion); cross != "" {
 		if !regionPattern.MatchString(cross) {
@@ -358,6 +360,27 @@ func resolveCLSTransport(cfg *Config) (*clsTransport, error) {
 		headers["x-cross-region"] = cross
 	}
 	return &clsTransport{endpoint: endpoint, headers: headers}, nil
+}
+
+// clsAuthHeader picks the credential header. An API Key wins over
+// SecretID/SecretKey; a malformed key is an error rather than a silent
+// fallback to the secrets.
+func clsAuthHeader(cfg *Config) (string, string, error) {
+	if apiKey := strings.TrimSpace(firstNonEmpty(cfg.APIKey, os.Getenv(EnvAPIKey))); apiKey != "" {
+		if strings.ContainsFunc(apiKey, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+			return "", "", errors.New("agentobs: invalid CLS API key")
+		}
+		return "x-cls-apikey", apiKey, nil
+	}
+	secretID := strings.TrimSpace(firstNonEmpty(cfg.SecretID, os.Getenv(EnvSecretID)))
+	secretKey := strings.TrimSpace(firstNonEmpty(cfg.SecretKey, os.Getenv(EnvSecretKey)))
+	if secretID == "" || secretKey == "" {
+		return "", "", fmt.Errorf("agentobs: CLS credentials are required (Config.APIKey or %s, or Config.SecretID/SecretKey or %s/%s)", EnvAPIKey, EnvSecretID, EnvSecretKey)
+	}
+	if strings.ContainsAny(secretID, ":\r\n") || strings.ContainsAny(secretKey, "\r\n") {
+		return "", "", errors.New("agentobs: invalid CLS credentials")
+	}
+	return "Authorization", "Basic " + base64.StdEncoding.EncodeToString([]byte(secretID+":"+secretKey)), nil
 }
 
 func clsTraceEndpoint(cfg *Config) (string, error) {

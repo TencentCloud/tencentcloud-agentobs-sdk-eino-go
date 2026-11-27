@@ -54,12 +54,13 @@ Graph/Chain 用 `compose.WithCallbacks(handler)` 注册即可；也可以调用 
 
 | 项 | 来源 |
 | --- | --- |
-| SecretId / SecretKey | `Config.SecretID/SecretKey`，否则读环境变量 `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` |
+| API Key | `Config.APIKey`，否则读环境变量 `CLS_API_KEY`。配置后优先使用，忽略 SecretId/SecretKey |
+| SecretId / SecretKey | 未配置 API Key 时使用。`Config.SecretID/SecretKey`，否则读环境变量 `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` |
 | 地域 | `Config.Region`，否则读 `CLS_DEFAULT_REGION`，例如 `ap-guangzhou` |
 | Trace 主题 | `Config.TopicID`，否则读 `CLS_TOPIC_ID` |
 | 上报地址 | 公网 `https://{region}.cls.tencentcs.com/v1/traces`；设置 `Intranet: true` 时走内网 `{region}.cls.tencentyun.com`；也可用 `Endpoint` 指定 |
 
-请求格式为 OTLP/HTTP protobuf，gzip 压缩，HTTP Basic 鉴权（`SecretId:SecretKey`），并携带 `topic_id` 请求头。跨地域上报时设置 `CrossRegion`，会写入 `x-cross-region` 请求头。
+请求格式为 OTLP/HTTP protobuf，gzip 压缩，用 `x-cls-apikey` 请求头（API Key）或 HTTP Basic（`SecretId:SecretKey`）鉴权，并携带 `topic_id` 请求头。跨地域上报时设置 `CrossRegion`，会写入 `x-cross-region` 请求头。
 
 安全要求：
 

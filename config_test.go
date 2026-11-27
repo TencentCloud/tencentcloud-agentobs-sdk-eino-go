@@ -54,6 +54,8 @@ func TestCLSExporterRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
+	// An ambient CLS_API_KEY would take precedence over the secrets under test.
+	t.Setenv(EnvAPIKey, "")
 	secretID, secretKey := "test-id", "test-key-value"
 	handler, err := NewHandler(context.Background(), &Config{
 		Endpoint:     server.URL,
@@ -166,6 +168,7 @@ func TestResolveCLSTransport(t *testing.T) {
 		t.Setenv(EnvTopicID, "env-topic")
 		t.Setenv(EnvSecretID, "env-id")
 		t.Setenv(EnvSecretKey, "env-key")
+		t.Setenv(EnvAPIKey, "")
 		transport, err := resolveCLSTransport(&Config{})
 		if err != nil {
 			t.Fatal(err)
@@ -186,6 +189,7 @@ func TestResolveCLSTransport(t *testing.T) {
 		"missing secret key":    func(c *Config) { c.SecretKey = "" },
 		"colon in secret id":    func(c *Config) { c.SecretID = "a:b" },
 		"newline in secret key": func(c *Config) { c.SecretKey = "a\nb" },
+		"space in api key":      func(c *Config) { c.APIKey = "a b" },
 		"bad cross region":      func(c *Config) { c.CrossRegion = "x\r\ny" },
 		"http without insecure": func(c *Config) { c.Endpoint = "http://localhost:4318" },
 		"unsupported scheme":    func(c *Config) { c.Endpoint = "ftp://example.com" },
@@ -197,12 +201,105 @@ func TestResolveCLSTransport(t *testing.T) {
 			t.Setenv(EnvTopicID, "")
 			t.Setenv(EnvSecretID, "")
 			t.Setenv(EnvSecretKey, "")
+			t.Setenv(EnvAPIKey, "")
 			cfg := valid()
 			mutate(cfg)
 			if _, err := resolveCLSTransport(cfg); err == nil {
 				t.Errorf("expected error")
 			}
 		})
+	}
+}
+
+func TestResolveCLSTransportAPIKey(t *testing.T) {
+	t.Run("api key replaces basic auth", func(t *testing.T) {
+		transport, err := resolveCLSTransport(&Config{Region: "ap-guangzhou", TopicID: "topic-1", APIKey: "test-api-key", SecretID: "id", SecretKey: "key"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if transport.headers["x-cls-apikey"] != "test-api-key" || transport.headers["topic_id"] != "topic-1" {
+			t.Errorf("headers = %v", transport.headers)
+		}
+		if _, ok := transport.headers["Authorization"]; ok {
+			t.Error("Authorization must not be sent with an API key")
+		}
+	})
+	t.Run("environment fallback is trimmed and needs no secrets", func(t *testing.T) {
+		t.Setenv(EnvAPIKey, "  env-api-key\n")
+		t.Setenv(EnvSecretID, "")
+		t.Setenv(EnvSecretKey, "")
+		transport, err := resolveCLSTransport(&Config{Region: "ap-guangzhou", TopicID: "topic-1"})
+		if err != nil || transport.headers["x-cls-apikey"] != "env-api-key" {
+			t.Errorf("transport = %v, err = %v", transport, err)
+		}
+	})
+	t.Run("config field wins over environment", func(t *testing.T) {
+		t.Setenv(EnvAPIKey, "env-api-key")
+		transport, err := resolveCLSTransport(&Config{Region: "ap-guangzhou", TopicID: "topic-1", APIKey: "field-api-key"})
+		if err != nil || transport.headers["x-cls-apikey"] != "field-api-key" {
+			t.Errorf("transport = %v, err = %v", transport, err)
+		}
+	})
+	t.Run("missing credentials mention the api key", func(t *testing.T) {
+		t.Setenv(EnvAPIKey, "")
+		t.Setenv(EnvSecretID, "")
+		t.Setenv(EnvSecretKey, "")
+		_, err := resolveCLSTransport(&Config{Region: "ap-guangzhou", TopicID: "topic-1"})
+		if err == nil || !strings.Contains(err.Error(), EnvAPIKey) {
+			t.Errorf("err = %v", err)
+		}
+	})
+	t.Run("malformed key does not fall back or leak", func(t *testing.T) {
+		_, err := resolveCLSTransport(&Config{Region: "ap-guangzhou", TopicID: "topic-1", APIKey: "leaky\nkey", SecretID: "id", SecretKey: "key"})
+		if err == nil || strings.Contains(err.Error(), "leaky") {
+			t.Errorf("err = %v", err)
+		}
+	})
+}
+
+func TestCLSExporterAPIKeyRequest(t *testing.T) {
+	var mu sync.Mutex
+	var headers []http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		headers = append(headers, r.Header.Clone())
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	handler, err := NewHandler(context.Background(), &Config{
+		Endpoint:     server.URL,
+		Insecure:     true,
+		TopicID:      "abc-trace-topic",
+		APIKey:       "test-api-key",
+		BatchTimeout: 10 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := handler.StartTrace(context.Background(), WithInput("ping"))
+	handler.EndTrace(ctx, "pong")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := handler.Shutdown(shutdownCtx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(headers) == 0 {
+		t.Fatal("no export request received")
+	}
+	got := headers[0]
+	if got.Get("x-cls-apikey") != "test-api-key" || got.Get("topic_id") != "abc-trace-topic" {
+		t.Errorf("headers = %v", got)
+	}
+	if got.Get("Authorization") != "" {
+		t.Error("Authorization must not be sent with an API key")
+	}
+	if got.Get("Content-Encoding") != "gzip" || got.Get("Content-Type") != "application/x-protobuf" {
+		t.Errorf("encoding headers = %q / %q", got.Get("Content-Encoding"), got.Get("Content-Type"))
 	}
 }
 
@@ -221,6 +318,7 @@ func TestNewHandlerValidation(t *testing.T) {
 
 func TestErrorsDoNotLeakSecrets(t *testing.T) {
 	cfg := &Config{Region: "ap-guangzhou", SecretID: "AKIDsecretvalue", SecretKey: "topsecretkey", TopicID: "bad topic"}
+	t.Setenv(EnvAPIKey, "")
 	_, err := resolveCLSTransport(cfg)
 	if err == nil {
 		t.Fatal("expected error")

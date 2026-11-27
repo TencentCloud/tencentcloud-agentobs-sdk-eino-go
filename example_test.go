@@ -19,8 +19,9 @@ import (
 // with github.com/cloudwego/eino-ext/components/model/openai.
 var chatModel model.ToolCallingChatModel
 
-// Credentials, region and topic come from TENCENTCLOUD_SECRET_ID,
-// TENCENTCLOUD_SECRET_KEY, CLS_DEFAULT_REGION and CLS_TOPIC_ID.
+// Credentials, region and topic come from CLS_API_KEY (or
+// TENCENTCLOUD_SECRET_ID and TENCENTCLOUD_SECRET_KEY), CLS_DEFAULT_REGION and
+// CLS_TOPIC_ID.
 func ExampleNewHandler() {
 	ctx := context.Background()
 	handler, err := agentobs.NewHandler(ctx, &agentobs.Config{

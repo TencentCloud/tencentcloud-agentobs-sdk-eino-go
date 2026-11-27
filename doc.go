@@ -12,8 +12,9 @@
 //	            └── agent (invoke_subagent)  agent run by the tool
 //
 // Spans are exported with OTLP/HTTP (protobuf + gzip) to
-// https://{region}.cls.tencentcs.com/v1/traces using HTTP Basic authentication
-// with a Tencent Cloud SecretId/SecretKey and the topic_id header.
+// https://{region}.cls.tencentcs.com/v1/traces with the topic_id header,
+// authenticated by a CLS API Key (x-cls-apikey header) or, when none is set,
+// HTTP Basic authentication with a Tencent Cloud SecretId/SecretKey.
 //
 // The callback lifecycle, ADK agent event handling, error ownership and
 // attribute-limit logic are adapted from

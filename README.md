@@ -54,12 +54,13 @@ For Graph/Chain, register with `compose.WithCallbacks(handler)`. You can also re
 
 | Item | Source |
 | --- | --- |
-| SecretId / SecretKey | `Config.SecretID/SecretKey`, otherwise the `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` environment variables |
+| API Key | `Config.APIKey`, otherwise the `CLS_API_KEY` environment variable. Takes precedence; SecretId/SecretKey are ignored when set |
+| SecretId / SecretKey | Used when no API Key is set. `Config.SecretID/SecretKey`, otherwise the `TENCENTCLOUD_SECRET_ID` / `TENCENTCLOUD_SECRET_KEY` environment variables |
 | Region | `Config.Region`, otherwise `CLS_DEFAULT_REGION`, e.g. `ap-guangzhou` |
 | Trace topic | `Config.TopicID`, otherwise `CLS_TOPIC_ID` |
 | Endpoint | Public `https://{region}.cls.tencentcs.com/v1/traces`; with `Intranet: true`, the VPC endpoint `{region}.cls.tencentyun.com`; or set `Endpoint` explicitly |
 
-Requests use OTLP/HTTP protobuf with gzip compression and HTTP Basic authentication (`SecretId:SecretKey`), and carry a `topic_id` header. For cross-region uploads, set `CrossRegion` to send the `x-cross-region` header.
+Requests use OTLP/HTTP protobuf with gzip compression and authenticate with the `x-cls-apikey` header (API Key) or HTTP Basic authentication (`SecretId:SecretKey`), and carry a `topic_id` header. For cross-region uploads, set `CrossRegion` to send the `x-cross-region` header.
 
 Security requirements:
 
